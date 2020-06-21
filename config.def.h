@@ -1,17 +1,28 @@
 /* See LICENSE file for copyright and license details. */
 
 /* appearance */
+#ifdef ZIPIT_Z2
+static char font[] = "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf:/usr/share/fonts/truetype/dejavu/DejaVuSansMono-Bold.ttf";
+static int fontsize = 8;
+static int borderpx = 0;
+static char shell[] = "/bin/sh";
+#else
 static char font[] = "./LiberationMono-Regular.ttf:./LiberationMono-Bold.ttf";
 static int fontsize = 12;
 static int borderpx = 2;
 static char shell[] = "/bin/sh";
+#endif
 
 /* double-click timeout (in milliseconds) between clicks for selection */
 static unsigned int doubleclicktimeout = 300;
 static unsigned int tripleclicktimeout = 600;
 
 /* TERM value */
+#ifdef ZIPIT_Z2
+static char termname[] = "xterm-color";
+#else
 static char termname[] = "st-256color";
+#endif
 
 static unsigned int tabspaces = 8;
 #define WORD_BREAK " "

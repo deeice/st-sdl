@@ -1544,6 +1544,9 @@ tsetmode(bool priv, bool set, int *args, int narg) {
 
 void
 csihandle(void) {
+	char buf[40];
+        int len;
+
 	switch(csiescseq.mode) {
 	default:
 	unknown:
@@ -1687,6 +1690,13 @@ csihandle(void) {
 		break;
 	case 'm': /* SGR -- Terminal attribute (color) */
 		tsetattr(csiescseq.arg, csiescseq.narg);
+		break;
+	case 'n':  /* DSR -- Device Status Report (cursor position) */
+                if (csiescseq.arg[0] == 6) {        
+			len = snprintf(buf, sizeof(buf),"\033[%i;%iR",
+                                        term.c.y+1, term.c.x+1);
+			ttywrite(buf, len);
+                }
 		break;
 	case 'r': /* DECSTBM -- Set Scrolling Region */
 		if(csiescseq.priv) {
@@ -2271,6 +2281,13 @@ sdlinit(void) {
 	/* colors */
 	initcolormap();
 
+#ifdef ZIPIT_Z2
+	xw.isfixed = 1;
+	xw.fx = xw.fy = 0;
+	xw.fw = 320;
+	xw.fh = 240;
+#endif
+	
 	/* adjust fixed window geometry */
 	if(xw.isfixed) {
 		if(xw.fx < 0)
@@ -2288,15 +2305,24 @@ sdlinit(void) {
 		xw.fy = 0;
 	}
 
+#ifdef ZIPIT_Z2
+	if (!(xw.win = SDL_SetVideoMode(xw.w, xw.h, 16, SDL_HWSURFACE | SDL_DOUBLEBUF | SDL_FULLSCREEN))) {
+		fprintf(stderr,"Unable to set video mode: %s\n", SDL_GetError());
+		exit(EXIT_FAILURE);
+	}
+	sdlresettitle();
+	expose(NULL);
+	SDL_EnableKeyRepeat(200, 20);
+#else
 	if(!(xw.win = SDL_SetVideoMode(xw.w, xw.h, 16, SDL_HWSURFACE | SDL_DOUBLEBUF | SDL_RESIZABLE))) {
 		fprintf(stderr,"Unable to set video mode: %s\n", SDL_GetError());
 		exit(EXIT_FAILURE);
 	}
-
 	sdlresettitle();
 	expose(NULL);
 	vi = SDL_GetVideoInfo();
 	cresize(vi->current_w, vi->current_h);
+#endif
 }
 
 void
@@ -2376,7 +2402,11 @@ xdraws(char *s, Glyph base, int x, int y, int charlen, int bytelen) {
 		SDL_Rect r = {winx, winy, width, xw.ch};
 
 		SDL_FillRect(xw.win, &r, SDL_MapRGB(xw.win->format, bg->r, bg->g, bg->b));
+#if 1 /* ZIPIT use antialiased font */
+		if(!(text_surface=TTF_RenderUTF8_Shaded(font,s,*fg,*bg))) {
+#else
 		if(!(text_surface=TTF_RenderUTF8_Solid(font,s,*fg))) {
+#endif
 			printf("Could not TTF_RenderUTF8_Solid: %s\n", TTF_GetError());
 			exit(EXIT_FAILURE);
 		} else {
@@ -2572,6 +2602,11 @@ kpress(SDL_Event *ev) {
 	meta = e->keysym.mod & KMOD_ALT;
 	shift = e->keysym.mod & KMOD_SHIFT;
 
+#ifdef ZIPIT_Z2
+	// fprintf(stderr,"K=%d,M=0x%x,S=%d,A=0x%x,U=%X\n",ksym,e->keysym.mod,shift,meta,e->keysym.unicode);
+        if(e->keysym.unicode) /* ZIPIT kbd fix */
+          meta = 0;
+#endif        
 	/* 1. shortcuts */
 	for(i = 0; i < LEN(shortcuts); i++) {
 		if((ksym == shortcuts[i].keysym)
@@ -2639,8 +2674,12 @@ cresize(int width, int height)
 	col = (xw.w - 2*borderpx) / xw.cw;
 	row = (xw.h - 2*borderpx) / xw.ch;
 
+#ifdef ZIPIT_Z2
+        xw.win = SDL_SetVideoMode(xw.w, xw.h, 16, SDL_HWSURFACE | SDL_DOUBLEBUF | SDL_FULLSCREEN);
+#else
 	xw.win = SDL_SetVideoMode(xw.w, xw.h, 16, SDL_HWSURFACE |
 SDL_DOUBLEBUF | SDL_RESIZABLE);
+#endif
 	tresize(col, row);
 	xresize(col, row);
 	ttyresize();
@@ -2791,7 +2830,12 @@ main(int argc, char *argv[]) {
 
 run:
 	setlocale(LC_CTYPE, "");
+#ifdef ZIPIT_Z2
 	tnew(80, 24);
+        // need to div scrensize by charsize (initial_width / xw.cw), (initial_height / xw.ch)
+#else
+	tnew(80, 24);
+#endif
 	ttynew();
 	sdlinit(); /* Must have TTY before cresize */
 	selinit();
